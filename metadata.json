@@ -1,0 +1,6 @@
+{
+  "name": "Rutuja's Art Collection - Windows Order Handling Console",
+  "description": "Windows desktop-style order management software for Rutuja's Art Collection to view order details, update delivery statuses, confirm cancellations, and sync with SQL database.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
