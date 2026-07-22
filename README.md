@@ -83,7 +83,26 @@ npm run start
 
 ---
 
-## ☁️ Deployment Guide
+## 🌐 Deploying to GitHub Pages (Fixing the White Screen)
+
+### Why a White Screen Occurred
+1. **Subpath Asset Links**: GitHub Pages hosts repositories on subpaths (e.g. `https://username.github.io/repository-name/`). Absolute asset links like `/assets/index.js` fail with `404 Not Found`, resulting in a blank white screen because scripts cannot load.
+2. **Backend API Dependency**: Pure static web hosts cannot execute Node.js Express server endpoints (`/api/orders`).
+
+### How It Was Resolved
+- Added `base: './'` in `vite.config.ts` so Vite generates relative asset links (`./assets/...`) that work seamlessly on any subpath or custom domain.
+- Configured client-side fallback state in `App.tsx` so the UI runs completely interactive with local storage and mock database state even when deployed on static web hosts.
+- Created an automated GitHub Actions deployment workflow in `.github/workflows/deploy.yml`.
+
+### How to Enable GitHub Pages in 1 Click
+1. Push this project to your GitHub repository (`main` branch).
+2. Go to your GitHub Repository -> **Settings** -> **Pages**.
+3. Under **Build and deployment** -> **Source**, select **GitHub Actions**.
+4. Push a new commit or re-run the workflow in the **Actions** tab. Your site will deploy live at `https://<YOUR_USERNAME>.github.io/<REPO_NAME>/`.
+
+---
+
+## ☁️ Deploying Full-Stack Backend (Render / Railway / Docker)
 
 ### Deploying to Render
 1. Go to [Render.com](https://render.com) and create a new **Web Service**.

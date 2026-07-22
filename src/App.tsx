@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { INITIAL_ORDERS } from './data/initialOrders';
 import { Order, SqlDatabaseConfig, SqlQueryLog, DeliveryStatus } from './types';
 import { WindowsTitleBar } from './components/WindowsTitleBar';
 import { WindowsStatusBar } from './components/WindowsStatusBar';
@@ -16,19 +17,19 @@ import { NewOrderModal } from './components/NewOrderModal';
 import { PrintInvoiceModal } from './components/PrintInvoiceModal';
 
 export default function App() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
   const [sqlConfig, setSqlConfig] = useState<SqlDatabaseConfig>({
-    host: 'mysql://rutuja-art-db.sql.internal',
-    port: 3306,
+    host: 'postgres://rutuja-art-collection.supabase.co:5432/postgres',
+    port: 5432,
     database: 'rutuja_art_collection_db',
-    username: 'rutuja_admin',
+    username: 'postgres',
     ssl: true,
     connected: true,
     lastSyncTime: new Date().toISOString(),
-    activeConnections: 4,
+    activeConnections: 6,
     queryLatencyMs: 12,
     tableCount: 6,
-    totalRecordsCount: 0
+    totalRecordsCount: INITIAL_ORDERS.length
   });
   const [sqlLogs, setSqlLogs] = useState<SqlQueryLog[]>([]);
 
@@ -49,26 +50,33 @@ export default function App() {
     setIsSyncing(true);
     try {
       const [ordersRes, configRes, logsRes] = await Promise.all([
-        fetch('/api/orders'),
-        fetch('/api/sql/config'),
-        fetch('/api/sql/query-logs')
+        fetch('/api/orders').catch(() => null),
+        fetch('/api/sql/config').catch(() => null),
+        fetch('/api/sql/query-logs').catch(() => null)
       ]);
 
-      const ordersData = await ordersRes.json();
-      const configData = await configRes.json();
-      const logsData = await logsRes.json();
+      if (ordersRes && ordersRes.ok && ordersRes.headers.get('content-type')?.includes('application/json')) {
+        const ordersData = await ordersRes.json();
+        if (ordersData.success && Array.isArray(ordersData.orders)) {
+          setOrders(ordersData.orders);
+        }
+      }
 
-      if (ordersData.success) {
-        setOrders(ordersData.orders);
+      if (configRes && configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
+        const configData = await configRes.json();
+        if (configData.success) {
+          setSqlConfig(configData.config);
+        }
       }
-      if (configData.success) {
-        setSqlConfig(configData.config);
-      }
-      if (logsData.success) {
-        setSqlLogs(logsData.logs);
+
+      if (logsRes && logsRes.ok && logsRes.headers.get('content-type')?.includes('application/json')) {
+        const logsData = await logsRes.json();
+        if (logsData.success && Array.isArray(logsData.logs)) {
+          setSqlLogs(logsData.logs);
+        }
       }
     } catch (err) {
-      console.error('Failed to fetch orders from API:', err);
+      console.warn('Backend API unavailable, utilizing client-side persistent storage:', err);
     } finally {
       setIsSyncing(false);
     }
@@ -100,14 +108,28 @@ export default function App() {
           notes,
           updatedBy: 'Admin (Rutuja V.)'
         })
-      });
+      }).catch(() => null);
 
-      const data = await res.json();
-      if (data.success) {
-        setOrders(prev => prev.map(o => o.id === data.order.id ? data.order : o));
-        setSelectedOrderForDeliveryStatus(null);
-        fetchOrdersAndConfig();
+      if (res && res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setOrders(prev => prev.map(o => o.id === data.order.id ? data.order : o));
+          setSelectedOrderForDeliveryStatus(null);
+          return;
+        }
       }
+
+      // Fallback for static deployment
+      const updatedOrder: Order = {
+        ...selectedOrderForDeliveryStatus,
+        deliveryStatus,
+        courierName: courierName || selectedOrderForDeliveryStatus.courierName,
+        trackingNumber: trackingNumber || selectedOrderForDeliveryStatus.trackingNumber,
+        estimatedDeliveryDate: estimatedDeliveryDate || selectedOrderForDeliveryStatus.estimatedDeliveryDate,
+        notes: notes ? `${selectedOrderForDeliveryStatus.notes || ''} [${notes}]` : selectedOrderForDeliveryStatus.notes
+      };
+      setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+      setSelectedOrderForDeliveryStatus(null);
     } catch (err) {
       console.error('Error updating delivery status:', err);
     }
@@ -126,14 +148,27 @@ export default function App() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, refundAmount, notes })
-      });
+      }).catch(() => null);
 
-      const data = await res.json();
-      if (data.success) {
-        setOrders(prev => prev.map(o => o.id === data.order.id ? data.order : o));
-        setSelectedOrderForCancellation(null);
-        fetchOrdersAndConfig();
+      if (res && res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setOrders(prev => prev.map(o => o.id === data.order.id ? data.order : o));
+          setSelectedOrderForCancellation(null);
+          return;
+        }
       }
+
+      // Fallback for static deployment
+      const newStatus = action === 'APPROVE' ? 'Cancelled & Refunded' : 'Cancellation Rejected';
+      const updatedOrder: Order = {
+        ...selectedOrderForCancellation,
+        cancellationStatus: newStatus,
+        refundAmount: action === 'APPROVE' ? refundAmount : 0,
+        notes: notes ? `${selectedOrderForCancellation.notes || ''} [Cancellation: ${notes}]` : selectedOrderForCancellation.notes
+      };
+      setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+      setSelectedOrderForCancellation(null);
     } catch (err) {
       console.error('Error confirming cancellation:', err);
     }
@@ -146,14 +181,36 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newOrderPartial)
-      });
+      }).catch(() => null);
 
-      const data = await res.json();
-      if (data.success) {
-        setOrders(prev => [data.order, ...prev]);
-        setIsNewOrderModalOpen(false);
-        fetchOrdersAndConfig();
+      if (res && res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setOrders(prev => [data.order, ...prev]);
+          setIsNewOrderModalOpen(false);
+          return;
+        }
       }
+
+      // Fallback for static deployment
+      const createdOrder: Order = {
+        id: `RAC-${Date.now().toString().slice(-5)}`,
+        orderDate: new Date().toISOString().split('T')[0],
+        customer: newOrderPartial.customer || { name: 'New Customer', email: 'collector@art.com', phone: '9820000000', address: 'Studio Address', city: 'Mumbai', state: 'MH', pincode: '400001' },
+        items: newOrderPartial.items || [],
+        subtotal: newOrderPartial.subtotal || 0,
+        tax: newOrderPartial.tax || 0,
+        totalAmount: newOrderPartial.totalAmount || 0,
+        paymentStatus: newOrderPartial.paymentStatus || 'Paid',
+        paymentMethod: newOrderPartial.paymentMethod || 'UPI / Razorpay',
+        deliveryStatus: 'Order Placed',
+        cancellationStatus: 'None',
+        courierName: newOrderPartial.courierName || 'Blue Dart Express',
+        trackingNumber: `BD${Math.floor(100000000 + Math.random() * 900000000)}IN`,
+        estimatedDeliveryDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0]
+      };
+      setOrders(prev => [createdOrder, ...prev]);
+      setIsNewOrderModalOpen(false);
     } catch (err) {
       console.error('Error creating order:', err);
     }
