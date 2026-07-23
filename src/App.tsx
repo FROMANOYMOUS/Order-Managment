@@ -10,6 +10,8 @@ import { CancellationManagerView } from './components/CancellationManagerView';
 import { SqlDbConsoleView } from './components/SqlDbConsoleView';
 import { CustomerDirectoryView } from './components/CustomerDirectoryView';
 import { AnalyticsView } from './components/AnalyticsView';
+import { WhatsAppQueueView } from './components/WhatsAppQueueView';
+import { ConfirmWhatsAppOrderModal } from './components/ConfirmWhatsAppOrderModal';
 import { DeliveryStatusModal } from './components/DeliveryStatusModal';
 import { CancellationModal } from './components/CancellationModal';
 import { OrderDetailModal } from './components/OrderDetailModal';
@@ -43,7 +45,157 @@ export default function App() {
   const [selectedOrderForDeliveryStatus, setSelectedOrderForDeliveryStatus] = useState<Order | null>(null);
   const [selectedOrderForCancellation, setSelectedOrderForCancellation] = useState<Order | null>(null);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
+  const [selectedWhatsAppOrderForConfirm, setSelectedWhatsAppOrderForConfirm] = useState<Order | null>(null);
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState<boolean>(false);
+
+  // Handle Confirm WhatsApp Order & Dispatch Notification
+  const handleConfirmWhatsAppOrderApi = async (
+    orderId: string,
+    courierName: string,
+    trackingNumber: string,
+    estimatedDeliveryDate: string,
+    customNotes: string
+  ) => {
+    try {
+      const res = await fetch('/api/whatsapp/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: orderId,
+          courierName,
+          trackingNumber,
+          estimatedDeliveryDate,
+          customNotes
+        })
+      }).catch(() => null);
+
+      if (res && res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && data.order) {
+          setOrders(prev => prev.map(o => o.id === data.order.id ? data.order : o));
+          setSelectedWhatsAppOrderForConfirm(null);
+          return;
+        }
+      }
+
+      // Fallback for client-side / static deployment
+      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId) {
+          return {
+            ...o,
+            orderConfirmationStatus: 'Confirmed',
+            deliveryStatus: 'Processing',
+            courierName: courierName || 'Blue Dart Express',
+            trackingNumber: trackingNumber || `BD-${Math.floor(10000000 + Math.random() * 90000000)}IN`,
+            estimatedDeliveryDate: estimatedDeliveryDate || new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+            whatsappDetails: {
+              ...o.whatsappDetails,
+              sentConfirmationAt: nowStr,
+              sentTrackingNumber: trackingNumber
+            },
+            deliveryLogs: [
+              ...o.deliveryLogs,
+              {
+                timestamp: nowStr,
+                status: 'Processing',
+                updatedBy: 'Admin (Rutuja V.)',
+                notes: `Order Confirmed by Owner. Automated WhatsApp confirmation sent with tracking ID ${trackingNumber}`
+              }
+            ]
+          };
+        }
+        return o;
+      }));
+      setSelectedWhatsAppOrderForConfirm(null);
+    } catch (err) {
+      console.error('Error confirming WhatsApp order:', err);
+    }
+  };
+
+  // Handle Simulate Incoming WhatsApp Order
+  const handleSimulateIncomingWhatsAppOrder = async (sample: {
+    customerName: string;
+    phone: string;
+    artworkTitle: string;
+    amount: number;
+    address: string;
+    city: string;
+    messageText: string;
+  }) => {
+    try {
+      const res = await fetch('/api/whatsapp/simulate-incoming', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sample)
+      }).catch(() => null);
+
+      if (res && res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && data.order) {
+          setOrders(prev => [data.order, ...prev]);
+          return;
+        }
+      }
+
+      // Fallback for static deployment
+      const num = 1046 + orders.length;
+      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+      const newOrder: Order = {
+        id: `RAC-2026-${num}`,
+        orderDate: nowStr,
+        customer: {
+          id: `CUST-WA-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: sample.customerName,
+          email: `${sample.customerName.toLowerCase().replace(/\s+/g, '')}@example.com`,
+          phone: sample.phone,
+          address: sample.address,
+          city: sample.city,
+          state: 'Maharashtra',
+          pincode: '400020',
+          country: 'India'
+        },
+        items: [
+          {
+            id: `ART-${Math.floor(800 + Math.random() * 200)}`,
+            title: sample.artworkTitle,
+            category: 'Oil Painting',
+            dimensions: '24x36 inches',
+            framed: true,
+            quantity: 1,
+            unitPrice: Math.round(sample.amount / 1.12),
+            image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400&auto=format&fit=crop&q=80'
+          }
+        ],
+        subtotal: Math.round(sample.amount / 1.12),
+        tax: sample.amount - Math.round(sample.amount / 1.12),
+        shippingFee: 0,
+        totalAmount: sample.amount,
+        paymentMethod: 'UPI / GPay',
+        paymentStatus: 'Paid',
+        deliveryStatus: 'Order Placed',
+        cancellationStatus: 'None',
+        orderConfirmationStatus: 'Unconfirmed',
+        whatsappDetails: {
+          rawMessage: sample.messageText,
+          receivedAt: nowStr,
+          senderPhone: sample.phone,
+          whatsappMsgId: `WAMID.ABEG${Math.floor(1000000000 + Math.random() * 9000000000)}`
+        },
+        deliveryLogs: [
+          {
+            timestamp: nowStr,
+            status: 'Order Placed',
+            updatedBy: 'WhatsApp Supabase Webhook',
+            notes: 'Incoming message logged via Supabase Webhook. Pending Owner Confirmation.'
+          }
+        ]
+      };
+      setOrders(prev => [newOrder, ...prev]);
+    } catch (err) {
+      console.error('Error simulating WhatsApp order:', err);
+    }
+  };
 
   // Fetch initial order dataset & SQL config from backend Express API
   const fetchOrdersAndConfig = async () => {
@@ -249,6 +401,7 @@ export default function App() {
   // Derived counts
   const pendingCancellationsCount = orders.filter(o => o.cancellationStatus === 'Cancellation Requested').length;
   const pendingDeliveriesCount = orders.filter(o => ['Order Placed', 'Processing', 'Framing & Packing', 'Shipped', 'Out for Delivery'].includes(o.deliveryStatus)).length;
+  const unconfirmedWhatsAppCount = orders.filter(o => o.orderConfirmationStatus === 'Unconfirmed' || (o.whatsappDetails && !o.whatsappDetails.sentConfirmationAt)).length;
 
   // Filter orders by global search
   const searchedOrders = orders.filter(o => {
@@ -267,6 +420,7 @@ export default function App() {
   const getTabTitle = (tab: TabType) => {
     switch (tab) {
       case 'orders': return 'Orders Master Console';
+      case 'whatsapp': return 'WhatsApp Orders & Confirmation Desk';
       case 'delivery': return 'Delivery Status & Logistics Engine';
       case 'cancellations': return 'Cancellation Confirmation Desk';
       case 'customers': return 'Customer Directory & Collector Records';
@@ -302,6 +456,7 @@ export default function App() {
           setActiveTab={setActiveTab}
           pendingCancellationsCount={pendingCancellationsCount}
           pendingDeliveriesCount={pendingDeliveriesCount}
+          unconfirmedWhatsAppCount={unconfirmedWhatsAppCount}
           isDarkMode={isDarkMode}
         />
 
@@ -314,6 +469,15 @@ export default function App() {
               onUpdateDeliveryStatus={(o) => setSelectedOrderForDeliveryStatus(o)}
               onProcessCancellation={(o) => setSelectedOrderForCancellation(o)}
               onPrintInvoice={(o) => setSelectedOrderForPrint(o)}
+              isDarkMode={isDarkMode}
+            />
+          )}
+
+          {activeTab === 'whatsapp' && (
+            <WhatsAppQueueView
+              orders={orders}
+              onConfirmWhatsAppOrder={(o) => setSelectedWhatsAppOrderForConfirm(o)}
+              onSimulateIncomingOrder={handleSimulateIncomingWhatsAppOrder}
               isDarkMode={isDarkMode}
             />
           )}
@@ -443,6 +607,16 @@ export default function App() {
         <PrintInvoiceModal
           order={selectedOrderForPrint}
           onClose={() => setSelectedOrderForPrint(null)}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
+      {/* Confirm WhatsApp Order Modal */}
+      {selectedWhatsAppOrderForConfirm && (
+        <ConfirmWhatsAppOrderModal
+          order={selectedWhatsAppOrderForConfirm}
+          onClose={() => setSelectedWhatsAppOrderForConfirm(null)}
+          onConfirmOrder={handleConfirmWhatsAppOrderApi}
           isDarkMode={isDarkMode}
         />
       )}

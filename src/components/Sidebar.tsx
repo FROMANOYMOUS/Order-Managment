@@ -9,16 +9,18 @@ import {
   Printer, 
   Palette,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  MessageSquare
 } from 'lucide-react';
 
-export type TabType = 'orders' | 'delivery' | 'cancellations' | 'customers' | 'sql_db' | 'analytics' | 'print';
+export type TabType = 'orders' | 'whatsapp' | 'delivery' | 'cancellations' | 'customers' | 'sql_db' | 'analytics' | 'print';
 
 interface SidebarProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   pendingCancellationsCount: number;
   pendingDeliveriesCount: number;
+  unconfirmedWhatsAppCount?: number;
   isDarkMode: boolean;
 }
 
@@ -27,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   pendingCancellationsCount,
   pendingDeliveriesCount,
+  unconfirmedWhatsAppCount = 0,
   isDarkMode
 }) => {
   const menuItems: { id: TabType; label: string; icon: React.ReactNode; badge?: number; badgeColor?: string }[] = [
@@ -34,6 +37,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'orders',
       label: 'Orders Master',
       icon: <Package className="w-4 h-4" />
+    },
+    {
+      id: 'whatsapp',
+      label: 'WhatsApp Orders',
+      icon: <MessageSquare className="w-4 h-4 text-emerald-500" />,
+      badge: unconfirmedWhatsAppCount,
+      badgeColor: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold animate-pulse'
     },
     {
       id: 'delivery',

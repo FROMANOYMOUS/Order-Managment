@@ -83,6 +83,17 @@ export interface Order {
   deliveryLogs: DeliveryLog[];
   specialInstructions?: string;
   isUrgent?: boolean;
+
+  // WhatsApp & Unconfirmed Order attributes
+  orderConfirmationStatus?: 'Unconfirmed' | 'Confirmed';
+  whatsappDetails?: {
+    rawMessage?: string;
+    receivedAt?: string;
+    senderPhone?: string;
+    whatsappMsgId?: string;
+    sentConfirmationAt?: string;
+    sentTrackingNumber?: string;
+  };
 }
 
 export interface SqlDatabaseConfig {

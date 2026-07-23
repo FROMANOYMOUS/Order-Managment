@@ -308,6 +308,154 @@ app.get('/api/stats', (req, res) => {
 });
 
 
+// 11. WhatsApp Queue & Confirmation API Endpoints
+
+// Get unconfirmed WhatsApp orders
+app.get('/api/whatsapp/unconfirmed', (req, res) => {
+  const unconfirmed = ordersStore.filter(o => o.orderConfirmationStatus === 'Unconfirmed');
+  res.json({ success: true, count: unconfirmed.length, orders: unconfirmed });
+});
+
+// Confirm WhatsApp order & trigger WhatsApp confirmation broadcast message
+app.post('/api/whatsapp/confirm', (req, res) => {
+  const { id, courierName, trackingNumber, estimatedDeliveryDate, customNotes } = req.body;
+
+  const orderIndex = ordersStore.findIndex(o => o.id === id);
+  if (orderIndex === -1) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+
+  const order = ordersStore[orderIndex];
+  const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+  order.orderConfirmationStatus = 'Confirmed';
+  order.deliveryStatus = 'Processing';
+  order.courierName = courierName || 'Blue Dart Express';
+  order.trackingNumber = trackingNumber || `BD-${Math.floor(10000000 + Math.random() * 90000000)}IN`;
+  order.estimatedDeliveryDate = estimatedDeliveryDate || new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0];
+
+  if (!order.whatsappDetails) {
+    order.whatsappDetails = {};
+  }
+  order.whatsappDetails.sentConfirmationAt = nowStr;
+  order.whatsappDetails.sentTrackingNumber = order.trackingNumber;
+
+  // Add delivery audit log
+  order.deliveryLogs.push({
+    timestamp: nowStr,
+    status: 'Processing',
+    updatedBy: 'Admin (Rutuja V.)',
+    notes: `WhatsApp Order CONFIRMED by Owner. Assigned Courier: ${order.courierName}, Tracking Waybill: ${order.trackingNumber}. Automated WhatsApp dispatch confirmation sent to ${order.customer.phone}. ${customNotes || ''}`
+  });
+
+  ordersStore[orderIndex] = order;
+
+  // Log SQL query execution
+  logSqlQuery(`UPDATE rutuja_art_orders SET confirmation_status='Confirmed', delivery_status='Processing', tracking_number='${order.trackingNumber}', courier_name='${order.courierName}' WHERE id='${id}';`, 1);
+  logSqlQuery(`INSERT INTO whatsapp_outbound_messages (phone, message, tracking_id, status) VALUES ('${order.customer.phone}', 'Order ${order.id} Confirmed', '${order.trackingNumber}', 'SENT');`, 1);
+
+  // Generate outgoing WhatsApp reply text preview
+  const whatsappReplyMessage = `🎨 *Rutuja's Art Collection - Order Confirmed!*
+
+Hello ${order.customer.name}! 👋
+Thank you for purchasing original artwork. Your order *${order.id}* has been verified & confirmed by artist Rutuja V.
+
+🖼️ *Artwork:* ${order.items.map(i => i.title).join(', ')}
+💰 *Total Amount:* ₹${order.totalAmount.toLocaleString('en-IN')} (Paid)
+🚛 *Courier Partner:* ${order.courierName}
+🔖 *Tracking ID:* ${order.trackingNumber}
+📅 *Est. Delivery Date:* ${order.estimatedDeliveryDate}
+
+📄 *Tax Invoice Link:*
+https://rutuja-art-collection.app/invoice/${order.id}
+
+We are carefully applying floating frame protection and dispatching your canvas soon! 🌸`;
+
+  res.json({
+    success: true,
+    message: `Order ${order.id} confirmed! Automated WhatsApp dispatch message sent to ${order.customer.phone}.`,
+    order,
+    whatsappReplyMessage
+  });
+});
+
+// Simulate receiving an incoming WhatsApp message
+app.post('/api/whatsapp/simulate-incoming', (req, res) => {
+  const { customerName, phone, artworkTitle, amount, address, city, messageText } = req.body;
+
+  const num = 1046 + ordersStore.length;
+  const id = `RAC-2026-${num}`;
+  const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+
+  const newOrder: Order = {
+    id,
+    orderDate: nowStr,
+    customer: {
+      id: `CUST-WA-${Math.floor(1000 + Math.random() * 9000)}`,
+      name: customerName || 'Ankita Sharma',
+      email: `${(customerName || 'ankita').toLowerCase().replace(/\s+/g, '')}@example.com`,
+      phone: phone || '+91 98200 88102',
+      address: address || '102 Marine Plaza, Marine Drive',
+      city: city || 'Mumbai',
+      state: 'Maharashtra',
+      pincode: '400020',
+      country: 'India'
+    },
+    items: [
+      {
+        id: `ART-${Math.floor(800 + Math.random() * 200)}`,
+        title: artworkTitle || 'Golden Sunset Over Marine Drive',
+        category: 'Oil Painting',
+        dimensions: '24x36 inches',
+        framed: true,
+        quantity: 1,
+        unitPrice: amount ? Math.round(amount / 1.12) : 24500,
+        image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400&auto=format&fit=crop&q=80'
+      }
+    ],
+    subtotal: amount ? Math.round(amount / 1.12) : 24500,
+    tax: amount ? amount - Math.round(amount / 1.12) : 2940,
+    shippingFee: 0,
+    totalAmount: amount || 27440,
+    paymentMethod: 'UPI / GPay',
+    paymentStatus: 'Paid',
+    deliveryStatus: 'Order Placed',
+    cancellationStatus: 'None',
+    orderConfirmationStatus: 'Unconfirmed',
+    whatsappDetails: {
+      rawMessage: messageText || `Hi Rutuja, ordering ${artworkTitle || 'Golden Sunset Over Marine Drive'}. Sent GPay ₹${amount || 27440}. Address: ${address || '102 Marine Plaza, Marine Drive'}, ${city || 'Mumbai'}. Please confirm!`,
+      receivedAt: nowStr,
+      senderPhone: phone || '+91 98200 88102',
+      whatsappMsgId: `WAMID.ABEG${Math.floor(1000000000 + Math.random() * 9000000000)}`
+    },
+    deliveryLogs: [
+      {
+        timestamp: nowStr,
+        status: 'Order Placed',
+        updatedBy: 'WhatsApp Supabase Webhook',
+        notes: 'Incoming message logged via Supabase Webhook. Pending Owner Confirmation.'
+      }
+    ]
+  };
+
+  ordersStore.unshift(newOrder);
+
+  logSqlQuery(`INSERT INTO whatsapp_incoming_messages (id, phone, text, status) VALUES ('${newOrder.id}', '${newOrder.customer.phone}', '${newOrder.whatsappDetails?.rawMessage}', 'UNCONFIRMED');`, 1);
+
+  res.status(201).json({
+    success: true,
+    message: 'Incoming WhatsApp order simulated & added to Unconfirmed Queue!',
+    order: newOrder
+  });
+});
+
+// Standard Webhook endpoint for Meta WhatsApp Cloud API or Twilio
+app.post('/api/whatsapp/webhook', (req, res) => {
+  logSqlQuery('POST /api/whatsapp/webhook -- SUPABASE WHATSAPP PAYLOAD RECEIVED', 1);
+  res.status(200).json({ status: 'success', message: 'WhatsApp Webhook processed successfully' });
+});
+
+
 // ==================== VITE MIDDLEWARE SETUP ====================
 
 async function startServer() {

@@ -2,6 +2,111 @@ import { Order } from '../types';
 
 export const INITIAL_ORDERS: Order[] = [
   {
+    id: 'RAC-2026-1045',
+    orderDate: '2026-07-23 10:12',
+    customer: {
+      id: 'CUST-WA-9011',
+      name: 'Tanvi Patwardhan',
+      email: 'tanvi.p@example.com',
+      phone: '+91 98200 91823',
+      address: '701 Sunshine Apartments, Prabhat Road, Erandwane',
+      city: 'Pune',
+      state: 'Maharashtra',
+      pincode: '411004',
+      country: 'India',
+      totalOrdersCount: 1
+    },
+    items: [
+      {
+        id: 'ART-915',
+        title: 'Emerald Forest & Gold Leaf Resin Canvas',
+        category: 'Resin Art',
+        dimensions: '24x36 inches',
+        framed: true,
+        quantity: 1,
+        unitPrice: 22000,
+        image: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400&auto=format&fit=crop&q=80',
+        artistNote: 'High gloss epoxy resin layer with genuine 24k gold leaf foil veins.'
+      }
+    ],
+    subtotal: 22000,
+    tax: 2640,
+    shippingFee: 0,
+    totalAmount: 24640,
+    paymentMethod: 'UPI / GPay',
+    paymentStatus: 'Paid',
+    deliveryStatus: 'Order Placed',
+    cancellationStatus: 'None',
+    orderConfirmationStatus: 'Unconfirmed',
+    whatsappDetails: {
+      rawMessage: 'Hi Rutuja! I loved the Emerald Forest Resin painting from your Instagram page. I sent ₹24,640 via GPay UPI (Ref: 4209182340). Delivery address: 701 Sunshine Apartments, Prabhat Rd, Pune 411004. Please confirm order!',
+      receivedAt: '2026-07-23 10:12',
+      senderPhone: '+91 98200 91823',
+      whatsappMsgId: 'WAMID.ABEG1029384756'
+    },
+    deliveryLogs: [
+      {
+        timestamp: '2026-07-23 10:12',
+        status: 'Order Placed',
+        updatedBy: 'WhatsApp Supabase Webhook',
+        notes: 'Incoming message received from +91 98200 91823. Stored in Non-Confirmed Queue.'
+      }
+    ],
+    specialInstructions: 'Customer requested sturdy wooden box packaging for transit.',
+    isUrgent: true
+  },
+  {
+    id: 'RAC-2026-1044',
+    orderDate: '2026-07-23 09:05',
+    customer: {
+      id: 'CUST-WA-8920',
+      name: 'Karan Shah',
+      email: 'karan.shah@example.com',
+      phone: '+91 99302 44109',
+      address: 'Villa 14, Royal Palms Estate, Goregaon East',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      pincode: '400065',
+      country: 'India'
+    },
+    items: [
+      {
+        id: 'ART-882',
+        title: 'Mystic Radha Krishna Charcoal Portrait',
+        category: 'Charcoal Sketch',
+        dimensions: '18x24 inches',
+        framed: true,
+        quantity: 1,
+        unitPrice: 12800,
+        image: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400&auto=format&fit=crop&q=80'
+      }
+    ],
+    subtotal: 12800,
+    tax: 1536,
+    shippingFee: 0,
+    totalAmount: 14336,
+    paymentMethod: 'UPI / GPay',
+    paymentStatus: 'Paid',
+    deliveryStatus: 'Order Placed',
+    cancellationStatus: 'None',
+    orderConfirmationStatus: 'Unconfirmed',
+    whatsappDetails: {
+      rawMessage: 'Hello, inquiring for Radha Krishna Charcoal portrait. Is it available for immediate dispatch to Goregaon? Paid ₹14,336 on Paytm UPI.',
+      receivedAt: '2026-07-23 09:05',
+      senderPhone: '+91 99302 44109',
+      whatsappMsgId: 'WAMID.ABEG9876543210'
+    },
+    deliveryLogs: [
+      {
+        timestamp: '2026-07-23 09:05',
+        status: 'Order Placed',
+        updatedBy: 'WhatsApp Supabase Webhook',
+        notes: 'Message logged via WhatsApp Cloud API.'
+      }
+    ],
+    isUrgent: false
+  },
+  {
     id: 'RAC-2026-1042',
     orderDate: '2026-07-21 14:30',
     customer: {
